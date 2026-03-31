@@ -4,24 +4,43 @@ const Anthropic = require('@anthropic-ai/sdk');
 const app = express();
 app.use(express.json({ limit: '20mb' }));
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-// ✏️ PASTE YOUR PRICE LIST HERE — replace the examples with your real prices
+// ✏️ PASTE YOUR PRICE LIST HERE
 const PRICE_LIST = `
   Labour: $85/hr
   Call out fee: $150
-  skruer: $45 each
+  Part A: $45 each
   Part B: $30 each
-  (add your real prices here)
 `;
+
+// Health check - shows if API key is loaded
+app.get('/', (req, res) => {
+  const keyLoaded = !!process.env.ANTHROPIC_API_KEY;
+  const keyPreview = process.env.ANTHROPIC_API_KEY
+    ? process.env.ANTHROPIC_API_KEY.substring(0, 15) + '...'
+    : 'NOT SET';
+
+  res.json({
+    status: 'Invoice checker is running ✓',
+    apiKeyLoaded: keyLoaded,
+    apiKeyPreview: keyPreview
+  });
+});
 
 app.post('/check-invoice', async (req, res) => {
   try {
+    // Check API key first
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not set on this server!' });
+    }
+
     const { pdfBase64 } = req.body;
 
     if (!pdfBase64) {
       return res.status(400).json({ error: 'No PDF provided' });
     }
+
+    // Create client inside handler so it always reads current env var
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -73,12 +92,8 @@ If everything looks correct, just reply: "INVOICE OK - Case ID: XXXX"`
   }
 });
 
-// Health check so Railway knows the app is running
-app.get('/', (req, res) => {
-  res.json({ status: 'Invoice checker is running ✓' });
-});
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`API Key loaded: ${!!process.env.ANTHROPIC_API_KEY}`);
 });
